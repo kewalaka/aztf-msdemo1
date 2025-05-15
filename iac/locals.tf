@@ -1,5 +1,5 @@
 locals {
-  appname              = "oidc-demo"
+  appname              = "aztf-msdemo1"
   short_appname        = local.appname # less than 14 characters to fit resource naming constraints
   default_suffix       = "${local.appname}-${var.env_code}"
   default_short_suffix = "${local.short_appname}${var.env_code}"
