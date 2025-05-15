@@ -1,0 +1,168 @@
+name: Deploy IaC using Terraform
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: 'Select target environment'
+        required: true
+        type: choice
+        default: dev
+        options:
+          - dev
+      destroyResources:
+        type: boolean
+        default: false
+
+env:
+  iac_relative_path: "./iac"
+  tf_state_resource_group_name: "rg-oidc-demo-${{ inputs.target_environment }}"
+  tf_state_storage_account_name: "stoidcdem${{ inputs.target_environment }}01"
+
+defaults:
+  run:
+    shell: bash
+
+run-name: ${{ github.workflow }} - Terraform (${{ inputs.target_environment }}) by @${{ github.actor }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform-plan:
+    name: "Terraform Plan (${{ inputs.target_environment }})"
+    runs-on: ubuntu-latest
+    environment: "${{ inputs.target_environment }}-iac-plan"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+        env:
+          ARM_USE_OIDC: true
+          ARM_USE_AZUREAD: true
+
+      - name: Ensure Terraform Backend Exists
+        id: terraform-backend      
+        uses: ./.github/actions/terraform-backend
+        with:
+          resource_group_name: ${{ env.tf_state_resource_group_name }}
+          storage_account_name: ${{ env.tf_state_storage_account_name }}
+          artifact_container_name: "tfartifact"
+        env:
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          TF_STATE_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init
+        run: |
+          arguments=()
+          arguments+=("init")
+          arguments+=("-backend-config=resource_group_name=${{ steps.terraform-backend.outputs.resource_group_name }}")
+          arguments+=("-backend-config=storage_account_name=${{ steps.terraform-backend.outputs.storage_account_name }}")
+          arguments+=("-backend-config=container_name=${{ steps.terraform-backend.outputs.state_container_name }}")
+          arguments+=("-backend-config=key=${{ env.BACKEND_AZURE_STORAGE_ACCOUNT_CONTAINER_KEY_NAME }}")
+          arguments+=("-backend-config=use_azuread_auth=true")
+
+          # Run terraform init
+          command="terraform"
+          echo "Running: $command ${arguments[@]}"
+          $command "${arguments[@]}"
+        env:
+          BACKEND_AZURE_STORAGE_ACCOUNT_CONTAINER_KEY_NAME: 'terraform.tfstate'
+        working-directory: ${{ env.iac_relative_path }}
+
+      - name: Terraform Plan
+        run: |
+          terraform plan -var-file="./environments/${{ inputs.target_environment }}.terraform.tfvars" \
+          -out=tfplan -input=false \
+          ${{ inputs.destroyResources && '-destroy' || '' }}
+        working-directory: ${{ env.iac_relative_path }}
+        env:
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Upload Plan Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.iac_relative_path }}/tfplan
+
+  terraform-apply:
+    name: "Terraform Apply (${{ inputs.target_environment }})"
+    runs-on: ubuntu-latest
+    needs: terraform-plan
+    environment: "${{ inputs.target_environment }}-iac-apply"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Download Plan Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.iac_relative_path }}
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          tenant-id: ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+        env:
+          ARM_USE_OIDC: true
+          ARM_USE_AZUREAD: true
+
+      - name: Ensure Terraform Backend Exists
+        id: terraform-backend      
+        uses: ./.github/actions/terraform-backend
+        with:
+          resource_group_name: ${{ env.tf_state_resource_group_name }}
+          storage_account_name: ${{ env.tf_state_storage_account_name }}
+        env:
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          TF_STATE_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init
+        run: |
+          arguments=()
+          arguments+=("init")
+          arguments+=("-backend-config=resource_group_name=${{ steps.terraform-backend.outputs.resource_group_name }}")
+          arguments+=("-backend-config=storage_account_name=${{ steps.terraform-backend.outputs.storage_account_name }}")
+          arguments+=("-backend-config=container_name=${{ steps.terraform-backend.outputs.state_container_name }}")
+          arguments+=("-backend-config=key=${{ env.BACKEND_AZURE_STORAGE_ACCOUNT_CONTAINER_KEY_NAME }}")
+          arguments+=("-backend-config=use_azuread_auth=true")
+
+          # Run terraform init
+          command="terraform"
+          echo "Running: $command ${arguments[@]}"
+          $command "${arguments[@]}"
+        env:
+          BACKEND_AZURE_STORAGE_ACCOUNT_CONTAINER_KEY_NAME: 'terraform.tfstate'
+        working-directory: ${{ env.iac_relative_path }}
+
+      - name: Terraform Apply
+        if: ${{ !inputs.destroyResources }}
+        run: terraform apply -auto-approve tfplan
+        working-directory: ${{ env.iac_relative_path }}
+        env:
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Terraform Destroy
+        if: ${{ inputs.destroyResources }}
+        run: terraform destroy -auto-approve -var-file="./environments/${{ inputs.target_environment }}.terraform.tfvars"
+        working-directory: ${{ env.iac_relative_path }}
+        env:
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}

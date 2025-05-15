@@ -1,0 +1,43 @@
+name: 'Ensure Terraform Backend Exists'
+description: 'Checks for/creates secure Azure Storage Account & Containers within an existing resource group, and grants necessary container RBAC.'
+
+inputs:
+  resource_group_name:
+    description: 'Name of the existing Resource Group for the backend.'
+    required: true
+  storage_account_name:
+    description: 'Name of the Storage Account for the backend (max 24 chars, lowercase alphanumeric).'
+    required: true
+  state_container_name:
+    description: 'Name of the container for Terraform state.'
+    required: true
+    default: 'tfstate'
+  artifact_container_name:
+    description: 'Name of the container for Terraform plan artifacts.'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Ensure Terraform Backend Storage and RBAC
+      shell: bash
+      run: |
+        bash ${{ github.action_path }}/deploy-terraform-backend.sh \
+          --resource-group '${{ inputs.resource_group_name }}' \
+          --storage-account '${{ inputs.storage_account_name }}' \
+          --state-container '${{ inputs.state_container_name }}' \
+          --artifact-container '${{ inputs.artifact_container_name }}'
+
+# we pass outputs from inputs because the user may override the defaults.
+outputs:
+  resource_group_name:
+    description: 'Terraform State Resource Group Name'
+    value: ${{ inputs.resource_group_name }}
+  storage_account_name:
+    description: 'Terraform State Storage Account Name'
+    value: ${{ inputs.storage_account_name }}
+  state_container_name:
+    description: 'Terraform State Container Name'
+    value: ${{ inputs.state_container_name }}
+  artifact_container_name:
+    description: 'Terraform Artifact Container Name'
+    value: ${{ inputs.artifact_container_name }}
