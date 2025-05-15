@@ -16,8 +16,8 @@ on:
 
 env:
   iac_relative_path: "./iac"
-  tf_state_resource_group_name: "rg-oidc-demo-${{ inputs.target_environment }}"
-  tf_state_storage_account_name: "stoidcdem${{ inputs.target_environment }}01"
+  tf_state_resource_group_name: "rg-aztf-msdemo1-${{ inputs.target_environment }}"
+  tf_state_storage_account_name: "staztfmsd1${{ inputs.target_environment }}01"
 
 defaults:
   run:

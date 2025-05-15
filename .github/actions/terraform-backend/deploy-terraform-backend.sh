@@ -175,6 +175,7 @@ function create_storage_account_and_containers() {
     --account-name "$STORAGE_ACCOUNT_NAME" \
     --resource-group "$RESOURCE_GROUP_NAME" \
     --enable-versioning true \
+    --enable-delete-retention true \
     --delete-retention-days "$RETENTION_DAYS" \
     --output none
 
