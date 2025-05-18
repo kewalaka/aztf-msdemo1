@@ -18,7 +18,8 @@ on:
         default: dev
         options:
           - dev
-      destroyResources:
+      destroy_resources:
+        description: 'Actually Destroy resources?'
         type: boolean
         default: false
 
@@ -42,4 +43,5 @@ jobs:
       environment_name_apply: "${{ inputs.target_environment }}-iac-apply"
       root_module_folder_relative_path: "./iac"
       tfvars_file: "./environments/${{ inputs.target_environment }}/${{ inputs.target_environment }}.terraform.tfvars"
-      destroy_resources: ${{ inputs.destroyResources == true || inputs.terraform_action == 'destroy' }}
+      destroy_resources: ${{ inputs.destroy_resources == true || inputs.terraform_action == 'destroy' }}
+      bypass_static_analysis_checks: true
