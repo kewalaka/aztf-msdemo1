@@ -19,7 +19,7 @@ on:
         options:
           - dev
       destroy_resources:
-        description: 'Actually Destroy resources?'
+        description: 'Actually destroy resources?'
         type: boolean
         default: false
 
@@ -45,3 +45,4 @@ jobs:
       tfvars_file: "./environments/${{ inputs.target_environment }}/${{ inputs.target_environment }}.terraform.tfvars"
       destroy_resources: ${{ inputs.destroy_resources == true || inputs.terraform_action == 'destroy' }}
       bypass_static_analysis_checks: true
+    secrets: inherit
