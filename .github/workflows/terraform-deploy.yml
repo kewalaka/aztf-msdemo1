@@ -44,5 +44,4 @@ jobs:
       root_module_folder_relative_path: "./iac"
       tfvars_file: "./environments/${{ inputs.target_environment }}.terraform.tfvars"
       destroy_resources: ${{ inputs.destroy_resources == true || inputs.terraform_action == 'destroy' }}
-      bypass_static_analysis_checks: true
     secrets: inherit
